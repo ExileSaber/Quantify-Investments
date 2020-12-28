@@ -1,0 +1,448 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas_datareader.data as web
+import datetime
+import pandas as pd
+import matplotlib as mpl
+import mpl_finance as mpf
+from matplotlib.dates import date2num
+
+
+# ———— 默认参数设置 ———— #
+window = 20  # 移动平均线窗口大小
+windows = [10, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300]
+
+k = 20  # 移动标准差窗口大小
+
+__colorup__ = "green"
+__colordown__ = "red"
+# —————————————— #
+
+
+# ————数据导入———— #
+start = datetime.datetime(2020, 1, 1)
+end = datetime.date.today()
+
+stock = web.DataReader("GM", "yahoo", start, end)  # 一共35次交易，获利交易次数占比45.71%,初始资金10000，最终资金23200.66, 收益率132.01%
+
+print(stock.head())
+# —————————————— #
+
+
+# ————绘图函数———— #
+def plot_ochl(data_df, axs=None, show=False):
+    '''
+    绘制烛状图
+    :param data_df: 输入的数据，默认采用tsla的历史行情数据，输入的数据类型目前只支持DataFrame类型
+    :param axs: 是否在子图上绘制
+    :param show: 是否显示图像
+    :return:
+    '''
+
+    if axs is None:
+        fig, ax = plt.subplots(figsize=(14, 7))
+        drawer = ax
+    else:
+        drawer = axs
+
+    qutotes = []
+
+    if 'open' in data_df.columns:
+        for index, (d, o, c, h, l) in enumerate(
+                zip(data_df.index, data_df.open, data_df.close,
+                    data_df.high, data_df.low)):
+
+            d = date2num(d)  # 蜡烛图的日期要使用matplotlib.finance.date2num进行转换为特有的数字值
+            val = (d, o, c, h, l)  # 日期，开盘，收盘，最高，最低组成tuple对象val
+            qutotes.append(val)  # 加val加入qutotes
+    elif 'Open' in data_df.columns:
+        if 'Time' in data_df.columns:
+            for index, (d, o, c, h, l) in enumerate(
+                    zip(data_df.index, data_df.Open, data_df.Close,
+                        data_df.High, data_df.Low)):
+                val = (int(index), o, c, h, l)  # 日期，开盘，收盘，最高，最低组成tuple对象val
+                qutotes.append(val)  # 加val加入qutotes
+        else:
+            for index, (d, o, c, h, l) in enumerate(
+                    zip(data_df.index, data_df.Open, data_df.Close,
+                        data_df.High, data_df.Low)):
+                d = pd.to_datetime(d)
+                d = date2num(d)  # 蜡烛图的日期要使用matplotlib.finance.date2num进行转换为特有的数字值
+                val = (d, o, c, h, l)  # 日期，开盘，收盘，最高，最低组成tuple对象val
+                qutotes.append(val)  # 加val加入qutotes
+
+    # 使用mpf.candlestick_ochl进行蜡烛绘制，ochl代表：open，close，high，low
+    mpf.candlestick_ochl(drawer, qutotes, width=0.6, colorup=__colorup__, colordown=__colordown__)
+
+    if 'Time' not in data_df.columns:
+        drawer.autoscale_view()
+        drawer.xaxis_date()
+
+    if show:
+        plt.show()
+
+
+def plot_avgline(data_df, axs=None, window=[30, 60, 90], show=False):
+    '''
+    绘制移动平均线
+    :param data_df: 输入的数据，默认采用tsla的历史行情数据，输入的数据类型目前只支持DataFrame类型
+    :param axs: 是否在子图上绘制
+    :param window: 窗口大小，可以是列表或者单个数值
+    :param show: 是否显示图像
+    :return:
+    '''
+
+    drawer = plt if axs is None else axs
+
+    if 'close' in data_df.columns:
+        data = data_df['close']
+    if 'Close' in data_df.columns:
+        data = data_df['Close']
+
+    if 'Time' in data_df.columns:
+        x = data_df.Time
+        x = range(len(x))
+    else:
+        x = data_df.index
+        x = pd.to_datetime(x)
+
+    if isinstance(window, list):
+        colors = mpl.colors.XKCD_COLORS
+        pal = [color for name, color in colors.items()][:len(window)]  # 色彩板
+
+        all_mean_data = []
+
+        for index, w in enumerate(window):
+            if isinstance(w, int):
+                mean_data = np.array([data[i: i + w].mean() for i in range(len(data) - w + 1)])
+                drawer.plot(x[w-1:], mean_data, color=pal[index], linestyle='-.', label=str(w)+' mv')
+
+                all_mean_data.append(mean_data)
+
+            elif isinstance(w, str):
+                w = int(w)
+                mean_data = np.array([data[i: i + w].mean() for i in range(len(data) - w + 1)])
+                drawer.plot(x[w - 1:], mean_data, color=pal[index], linestyle='-.', label=str(w) + ' mv')
+
+                all_mean_data.append(mean_data)
+
+            else:
+                try:
+                    raise TypeError('the type of element in list [- window -] is not int or string!')
+                except TypeError:
+                    print('raise, try except')
+
+        drawer.legend()
+
+        if show:
+            plt.show()
+
+        return all_mean_data
+
+    elif isinstance(window, int):
+        mean_data = np.array([data[i: i + window].mean() for i in range(len(data) - window + 1)])
+        drawer.plot(x[window - 1:], mean_data, 'r-.', label=str(window) + ' mv')
+        drawer.legend()
+
+        if show:
+            plt.show()
+
+        return mean_data
+    else:
+        try:
+            raise TypeError('[- window -] type is not int or list!')
+        except TypeError:
+            print('raise, try except')
+
+
+def bulin_line(data_df, window=5, k=5, axs=None, show=False):
+    '''
+    绘制布林线均值回归策略
+    :param data: 传入Series类型数据
+    :param window: 移动平均线计算窗口大小
+    :param k: 标准差计算窗口大小
+    :param show: 是否绘图
+    :return: up_line, down_line: 分别是上边界线和下边界线，注意返回的上下边线长度较短
+    '''
+    drawer = plt if axs is None else axs
+    data = data_df['Close']
+
+    if 'Time' in data_df.columns:
+        x = data_df.Time
+        x = range(len(x))
+    else:
+        x = data_df.index
+        x = pd.to_datetime(x)
+
+    mean_data = np.array([data[i: i+window].mean() for i in range(len(data) - window + 1)])
+    std_data = np.array([data[i: i+k].std() for i in range(len(data) - k + 1)])
+
+    windows = window
+
+    if window == k:
+        pass
+    elif window > k:
+        std_data = std_data[-len(mean_data):]
+    elif window < k:
+        windows = k
+        mean_data = mean_data[-len(std_data):]
+
+    up_line = mean_data + std_data
+    down_line = mean_data - std_data
+
+    drawer.plot(x[windows-1:], up_line, 'b--', label='up line', alpha=0.6)
+    drawer.plot(x[windows-1:], down_line, 'b--', label='down line', alpha=0.6)
+
+    drawer.legend()
+
+    if show:
+        plt.show()
+
+    return up_line, down_line
+
+
+def EMA(data, window):
+    '''
+
+    :param data: 传入的数据，需要为list、ndarray、series类型数据
+    :param window: 对应着计算的是几日的EMA
+    :return: 返回ndarray的数据类型
+    '''
+    list_ema = []
+
+    if not isinstance(data, list):
+        data = list(data)
+    list_ema.append(data[0])
+    for i in range(1, len(data)):
+        list_ema.append(2 * data[i] / (window+1) + (window-1) * list_ema[-1] / (window+1))
+    return np.array(list_ema)
+
+
+def draw_macd(dif, dea, macd, axs=None, show=False):
+    '''
+    通过传入DIF、DEA、MACD的值绘制MACD指标的两线一柱
+    :param dif: DIF指标的list或者ndarray数据类型
+    :param dea: DEA指标的list或者ndarray数据类型
+    :param macd: 为了代码简洁，目前只支持ndarray类型的MACD数据
+    :param axs: 是否在子图绘制
+    :param show: 是否绘图
+    :return:
+    '''
+    x = np.arange(len(dif))  # 横坐标
+
+    drawer = axs if axs is not None else plt
+
+    drawer.plot(x, dif, label='DIF', color='b', linestyle='--')  # 绘制DIF曲线
+    drawer.plot(x, dea, label='DEA', color='y', linestyle='-.')  # 绘制DEA曲线
+
+    pos_index = x[macd >= 0]  # 得到MACD值大于等于0的索引
+    neg_index = x[macd < 0]  # 得到MACD值小于0的索引
+
+    drawer.bar(pos_index, macd[pos_index], color='r', label='macd bar', alpha=0.6)  # 绘制MACD大于等于0部分的柱状图
+    drawer.bar(neg_index, macd[neg_index], color='g', label='macd bar', alpha=0.6)  # 绘制MACD小于0部分的柱状图
+
+    drawer.legend()
+
+    if show:
+        plt.show()
+
+
+def macd(data_df, axs=None, show=False):
+    '''
+    对draw_macd做了一个封装
+    :param data_df: 传入的数据，仅支持DataFrame数据类型
+    :param axs: 是否子图绘制
+    :param show: 是否显示
+    :return: dif, dea, macd分别对应着DIF指标，DEA指标，MACD柱状图指标
+    '''
+
+    if 'close' in data_df.columns:
+        ema_12 = EMA(data=data_df['close'], window=12)  # 12日EMA的值
+        ema_26 = EMA(data=data_df['close'], window=26)  # 26日EMA的值
+    if 'Close' in data_df.columns:
+        ema_12 = EMA(data=data_df['Close'], window=12)  # 12日EMA的值
+        ema_26 = EMA(data=data_df['Close'], window=26)  # 26日EMA的值
+
+    dif = ema_12 - ema_26  # 利用ndarray之间的减法运算即为各对应元素相减，得到DIF
+    dea = EMA(data=dif, window=9)  # 再计算DIF的9日EMA（该值被称为DEA）
+    macd = (dif - dea) * 2  # 计算MACD柱状图的值
+
+    draw_macd(dif, dea, macd, axs=axs, show=show)
+
+    return dif, dea, macd
+
+# —————————————— #
+
+
+# ————绘图部分———— #
+plot_ochl(data_df=stock)
+plot_avgline(data_df=stock, window=windows)
+plt.show()
+
+fig, ax = plt.subplots(2, 1, figsize=(14, 7))
+
+plot_ochl(data_df=stock, axs=ax[0])
+
+# 移动平均线绘制，返回均线的多维列表或者单个均线list
+mean_data = plot_avgline(data_df=stock, axs=ax[0], window=window)
+
+# 绘制布林线均值回归，返回上下边界线的list
+up_line, down_line = bulin_line(data_df=stock, window=window, k=k, axs=ax[0])
+
+# 绘制MACD指标，返回DIF，DEA，MACD的值
+dif, dea, macd = macd(data_df=stock, axs=ax[1])
+
+# plt.savefig('all.jpg', dpi=300)
+# plt.show()
+# —————————————— #
+
+
+# ————策略部分———— #
+# 采用MACD指标和布林线均值回归组合策略
+
+# 数据准备
+time = np.array(stock.index)
+open = np.array(stock['Open'][max(window, k)-1:])
+close = np.array(stock['Close'][max(window, k)-1:])
+high = np.array(stock['High'][max(window, k)-1:])
+low = np.array(stock['Low'][max(window, k)-1:])
+dif = dif[max(window, k)-1:]
+dea = dea[max(window, k)-1:]
+macd = macd[max(window, k)-1:]
+if k-window > 0:
+    mean_data = mean_data[k-window:]
+
+'''几种决策思路
+1、当日 open, close 高于 up_line
+2、当日 open, close 低于 down_line
+3、当日 open, close 高于 mean_data
+4、当日 open, close 低于 mean_data
+5、dif 高于 dea 为 True, dif 低于 dea 为 False
+6、macd 是否增长， macd 增长为 True， macd 下降为 False
+7、dif 从上往下穿过 dea 为 True
+8、dif 从下往上穿过 dea 为 True
+9、前一天 open, close 高于 up_line 并且 当日 open, close 低于 mean_data
+10、前一天 open, close 低于 up_line 并且 当日 open, close 高于 mean_data
+'''
+
+money = 10000  # 本金
+flag = False  # 是否持股
+buy_1_flag = True
+
+number = 0  # 持股数
+buy_price = []  # 买入价格
+sell_price = []  # 卖出价格
+
+buy_time = []  # 买入时间，绘图会用上
+sell_time = []  # 卖出时间，绘图会用上
+
+money_list = []  # 资产变化列表，绘图会用上
+
+print(len(open), len(dif), len(up_line), len(mean_data))
+
+for i in range(1, len(stock)-max(window, k)):
+    strategy_1 = True if open[i] > up_line[i] or close[i] > up_line[i] else False
+    strategy_2 = True if open[i] < down_line[i] or close[i] < down_line[i] else False
+    strategy_3 = True if open[i] > mean_data[i] or close[i] > mean_data[i] else False
+    strategy_4 = True if open[i] < mean_data[i] or close[i] < mean_data[i] else False
+    strategy_5 = True if dif[i] > dea[i] else False
+    strategy_6 = True if macd[i] > macd[i-1] else False
+    strategy_7 = True if dif[i-1] > dea[i-1] and dif[i] < dea[i] else False
+    strategy_8 = True if dif[i-1] < dea[i-1] and dif[i] > dea[i] else False
+    strategy_9 = True if (open[i-1] > mean_data[i-1] and close[i-1] > mean_data[i-1]) and (open[i] < down_line[i] and close[i] < down_line[i]) else False
+    strategy_10 = True if (open[i-1] < mean_data[i-1] and close[i-1] < mean_data[i-1]) and (open[i] > up_line[i] and close[i] > up_line[i]) else False
+
+    '''买卖策略
+    1、strategy_3、 strategy_6 为 True 组合策略买入
+    2、strategy_1、 strategy_4 为 True 和 strategy_6 为 False 卖出
+    3、strategy_2、 strategy_3、 strategy_6 为 True 买入
+    4、强买入信号 strategy_8 为 True
+    5、强卖出信号 strategy_7 为 True
+    '''
+
+    buy_1 = strategy_3 and strategy_6
+    buy_2 = strategy_2 and strategy_3 and strategy_6
+    buy_3 = strategy_10
+    buy_4 = strategy_8
+
+    sell_1 = strategy_1 and strategy_4 and not strategy_6
+    sell_2 = strategy_9
+    sell_3 = strategy_7
+
+    if ((buy_1 and buy_1_flag) or buy_2 or buy_3 or buy_4) and not flag:
+        print("买入：", i)
+        print((buy_1 and buy_1_flag), buy_2, buy_3, buy_4)
+        buy_1_flag = False
+
+        flag = True
+        buy_price.append(close[i])
+        number = money / close[i]
+
+        buy_time.append(i)
+
+    elif (sell_1 or sell_2 or sell_3) and flag:
+        print("卖出：", i)
+        print(sell_1, sell_2, sell_3)
+
+        flag = False
+        sell_price.append(close[i])
+        money = number * close[i]
+
+        print(money)
+        number = 0
+        sell_time.append(i)
+
+    money_list.append(money)
+
+if number != 0:
+    print('目前持股，收盘价卖出')
+    sell_time.append(len(stock) - max(window, k))
+    sell_price.append(close[-1])
+    money = number * close[-1]
+
+print('最后资金：', money)
+
+total = 0
+earn = 0
+for i in range(len(sell_time)):
+    print('买入时间：{}, 买入价格：{}'.format(time[max(window, k) - 1 + buy_time[i]], buy_price[i]))
+    print('卖出时间：{}, 卖出价格：{}'.format(time[max(window, k) - 1 + sell_time[i]], sell_price[i]))
+    total += 1
+    if sell_price[i] > buy_price[i]:
+        earn += 1
+
+print("一共{}次交易，获利交易次数占比{:.2f}%,初始资金{}，最终资金{:.2f}, 收益率{:.2f}%".format(total, 100 * earn/total, 10000, money, (money-10000)/100))
+
+if number != 0:
+    print('目前持股')
+else:
+    print('目前没有持股')
+
+# ————交易绘图———— #
+# 绘制股票柱状图和买入卖出点
+# 绘制资产变化表
+
+plot_ochl(data_df=stock)
+bulin_line(data_df=stock, window=window, k=k)
+plot_avgline(data_df=stock, window=window)
+
+plt.fill_between(stock.index, 0, stock['Close'], color='blue', alpha=.08)
+for i in range(len(sell_time)):
+    start = buy_time[i] + max(window, k) - 1
+    end = sell_time[i] + max(window, k) - 1
+
+    # print(stock['Close'][start])
+    # print(buy_price[i])
+    # print(stock['Close'][end])
+    # print(sell_price[i])
+
+    if stock['Close'][start] < stock['Close'][end]:
+        color = 'green'
+    else:
+        color = 'red'
+
+    plt.fill_between(stock.index[start:end+1], 0, stock['Close'][start:end+1], color=color, alpha=.38)
+
+plt.ylim(np.min(stock['Close']) - 5, np.max(stock['Close']) + 5)
+# plt.savefig('strategy.jpg', dpi=300)
+plt.show()
